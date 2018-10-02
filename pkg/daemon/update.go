@@ -29,11 +29,10 @@ const (
 // update the node to the provided node configuration.
 func (dn *Daemon) update(oldConfig, newConfig *mcfgv1.MachineConfig) error {
 	var err error
-
 	glog.Info("Updating node with new config")
 
 	// make sure we can actually reconcile this state
-	reconcilable, err := dn.reconcilable(oldConfig, newConfig)
+	reconcilable, usrIndices, err := dn.reconcilable(oldConfig, newConfig)
 	if err != nil {
 		return err
 	}
@@ -48,6 +47,10 @@ func (dn *Daemon) update(oldConfig, newConfig *mcfgv1.MachineConfig) error {
 	}
 
 	if err = dn.updateOS(oldConfig, newConfig); err != nil {
+		return err
+	}
+
+	if err = dn.updatePasswd(oldConfig, newConfig, usrIndices); err != nil {
 		return err
 	}
 
@@ -87,18 +90,23 @@ func (dn *Daemon) update(oldConfig, newConfig *mcfgv1.MachineConfig) error {
 // we can only update machine configs that have changes to the files,
 // directories, links, and systemd units sections of the included ignition
 // config currently.
-func (dn *Daemon) reconcilable(oldConfig, newConfig *mcfgv1.MachineConfig) (bool, error) {
+func (dn *Daemon) reconcilable(oldConfig, newConfig *mcfgv1.MachineConfig) (bool, []int, error) {
 	glog.Info("Checking if configs are reconcilable")
 
 	// We skip out of reconcilable if there is no Kind and we are in runOnce mode. The
-	// reason is that there is a good chance a previous state is not available to match against.
+	// // reason is that there is a good chance a previous state is not available to match against.
 	if oldConfig.Kind == "" && dn.onceFrom != "" {
 		glog.Infof("Missing kind in old config. Assuming no prior state.")
-		return true, nil
+		return true, nil, nil
 	}
 	oldIgn := oldConfig.Spec.Config
 	newIgn := newConfig.Spec.Config
-
+	glog.Infof("len oldIgnUsers: %v", len(oldIgn.Passwd.Users))
+	glog.Infof("len newIgnUsers: %v", len(newIgn.Passwd.Users))
+	//glog.Infof("Name oldIgnUsers: %s", oldIgn.Passwd.Users[0].Name)
+	//glog.Infof("Name newIgnUsers: %s", newIgn.Passwd.Users[0].Name)
+	// using array to avoid having to reloop thru PasswdUsers to find which Users have changes
+	var usersIndicesChanges []int
 	// Ignition section
 
 	// if the config versions are different, all bets are off. this probably
@@ -107,7 +115,7 @@ func (dn *Daemon) reconcilable(oldConfig, newConfig *mcfgv1.MachineConfig) (bool
 		glog.Warningf("daemon can't reconcile state!")
 		glog.Warningf("Ignition version mismatch between old and new config: old: %s new: %s",
 			oldIgn.Ignition.Version, newIgn.Ignition.Version)
-		return false, nil
+		return false, nil, nil
 	}
 	// everything else in the ignition section doesn't matter to us, since the
 	// rest of the stuff in this section has to do with fetching remote
@@ -121,7 +129,7 @@ func (dn *Daemon) reconcilable(oldConfig, newConfig *mcfgv1.MachineConfig) (bool
 	if !reflect.DeepEqual(oldIgn.Networkd, newIgn.Networkd) {
 		glog.Warningf("daemon can't reconcile state!")
 		glog.Warningf("Ignition networkd section contains changes")
-		return false, nil
+		return false, nil, nil
 	}
 
 	// Passwd section
@@ -129,9 +137,46 @@ func (dn *Daemon) reconcilable(oldConfig, newConfig *mcfgv1.MachineConfig) (bool
 	// we don't currently configure groups or users in place. we can't fix it if
 	// something changed here.
 	if !reflect.DeepEqual(oldIgn.Passwd, newIgn.Passwd) {
-		glog.Warningf("daemon can't reconcile state!")
-		glog.Warningf("Ignition passwd section contains changes")
-		return false, nil
+		// MCD will handle only ignition SSH keys
+		// This section will check (using some tbd magic) to see if the ONLY diff between 2
+		// Passwd configs is an SSHAuthorizedKey change
+		// Any change other than an SSHChanage will return false.
+
+		sshReconcilable := false
+		// If the size of list Users is different, a User has been added or deleted -> nope
+		if len(oldIgn.Passwd.Users) == len(newIgn.Passwd.Users) {
+			// Users is an array of User, iterate thru each
+			for i := range oldIgn.Passwd.Users {
+				// Check if the SSHKeys match
+				if !reflect.DeepEqual(oldIgn.Passwd.Users[i].SSHAuthorizedKeys, newIgn.Passwd.Users[i].SSHAuthorizedKeys) {
+					// keys don't match, let's create 2 temp Users
+					tempOld := oldIgn.Passwd.Users[i]
+					tempNew := newIgn.Passwd.Users[i]
+					// Let's set both Users' SSHKeys to match
+					tempOld.SSHAuthorizedKeys = tempNew.SSHAuthorizedKeys
+					// Now compare the two Users controlling for the SSHAuthorizedKey diff
+					if reflect.DeepEqual(tempOld, tempNew) {
+						// only diff between the two Passwds was the SSH key
+						sshReconcilable = true
+						usersIndicesChanges = append(usersIndicesChanges, i)
+					} else {
+						// there are differences other than just the SSH key
+						sshReconcilable = false
+						break
+					}
+				} else {
+					// SSH keys match, nothing to do on this
+					sshReconcilable = false
+					break
+				}
+			}
+		}
+
+		if !sshReconcilable {
+			glog.Warningf("daemon can't reconcile state!")
+			glog.Warningf("Ignition passwd section contains non-SSH changes")
+		}
+		return sshReconcilable, usersIndicesChanges, nil
 	}
 
 	// Storage section
@@ -142,17 +187,17 @@ func (dn *Daemon) reconcilable(oldConfig, newConfig *mcfgv1.MachineConfig) (bool
 	if !reflect.DeepEqual(oldIgn.Storage.Disks, newIgn.Storage.Disks) {
 		glog.Warningf("daemon can't reconcile state!")
 		glog.Warningf("Ignition disks section contains changes")
-		return false, nil
+		return false, nil, nil
 	}
 	if !reflect.DeepEqual(oldIgn.Storage.Filesystems, newIgn.Storage.Filesystems) {
 		glog.Warningf("daemon can't reconcile state!")
 		glog.Warningf("Ignition filesystems section contains changes")
-		return false, nil
+		return false, nil, nil
 	}
 	if !reflect.DeepEqual(oldIgn.Storage.Raid, newIgn.Storage.Raid) {
 		glog.Warningf("daemon can't reconcile state!")
 		glog.Warningf("Ignition raid section contains changes")
-		return false, nil
+		return false, nil, nil
 	}
 
 	// Special case files append: if the new config wants us to append, then we
@@ -161,7 +206,7 @@ func (dn *Daemon) reconcilable(oldConfig, newConfig *mcfgv1.MachineConfig) (bool
 		if f.Append {
 			glog.Warningf("daemon can't reconcile state!")
 			glog.Warningf("Ignition files includes append")
-			return false, nil
+			return false, nil, nil
 		}
 	}
 
@@ -171,7 +216,7 @@ func (dn *Daemon) reconcilable(oldConfig, newConfig *mcfgv1.MachineConfig) (bool
 
 	// we made it through all the checks. reconcile away!
 	glog.V(2).Infof("Configs are reconcilable")
-	return true, nil
+	return true, nil, nil
 }
 
 // updateFiles writes files specified by the nodeconfig to disk. it also writes
@@ -203,6 +248,19 @@ func (dn *Daemon) updateFiles(oldConfig, newConfig *mcfgv1.MachineConfig) error 
 	}
 
 	dn.deleteStaleData(oldConfig, newConfig)
+
+	return nil
+}
+
+// updatePasswd can be used to update Passwd with changes for Users at indices contained
+// in userKeys.  As of now, only SSHKeys are updated.
+func (dn *Daemon) updatePasswd(oldConfig, newConfig *mcfgv1.MachineConfig, userKeys []int) error {
+	glog.Info("Updating Passwd")
+	if userKeys != nil {
+		if err := dn.writeSSHKeys(oldConfig.Spec.Config.Passwd.Users, newConfig.Spec.Config.Passwd.Users, userKeys); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -432,6 +490,37 @@ func (dn *Daemon) writeFiles(files []ignv2_2types.File) error {
 		err = file.Close()
 		if err != nil {
 			return fmt.Errorf("Failed to close file %q: %v", f.Path, err)
+		}
+	}
+	return nil
+}
+
+// Update a given PasswdUser's SSHKey
+func (dn *Daemon) writeSSHKeys(oldUsers []ignv2_2types.PasswdUser, newUsers []ignv2_2types.PasswdUser, userKeys []int) error {
+	var sshDirPath string
+	for _, idx := range userKeys {
+		if !reflect.DeepEqual(oldUsers[idx].SSHAuthorizedKeys, newUsers[idx].SSHAuthorizedKeys) {
+			// ssh keys are in PasswdUser.HomeDir/.ssh/authorized_keys
+			sshDirPath = filepath.Join(oldUsers[idx].HomeDir, ".ssh")
+			glog.V(2).Infof("Writing SSHKeys at %q:", sshDirPath)
+			if err := dn.fileSystemClient.MkdirAll(filepath.Dir(sshDirPath), os.FileMode(0600)); err != nil {
+				return fmt.Errorf("Failed to create directory %q: %v", filepath.Dir(sshDirPath), err)
+			}
+			glog.V(2).Infof("Created directory: %s", sshDirPath)
+
+			authkeypath := filepath.Join(sshDirPath, "authorized_keys")
+			var concatSSHKeys string
+			for _, k := range newUsers[idx].SSHAuthorizedKeys {
+				concatSSHKeys = concatSSHKeys + string(k) + "\n"
+			}
+
+			if err := dn.fileSystemClient.WriteFile(authkeypath, []byte(concatSSHKeys), os.FileMode(0600)); err != nil {
+				return fmt.Errorf("Failed to write ssh key: %v", err)
+			}
+
+			glog.V(2).Infof("Wrote SSHKeys at %s", sshDirPath)
+		} else {
+			return fmt.Errorf("SSHKeys already match")
 		}
 	}
 	return nil

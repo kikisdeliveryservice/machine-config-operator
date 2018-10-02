@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/fake"
-
 	ignv2_2types "github.com/coreos/ignition/config/v2_2/types"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	"github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/fake"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 )
 
@@ -63,28 +62,29 @@ func TestUpdateOS(t *testing.T) {
 	}
 }
 
+// checkReconcilableResults is a shortcut for verifying results that should be reconcilable
+func checkReconcilableResults(t *testing.T, key string, err error, isReconcilable bool) {
+	if err != nil {
+		t.Errorf("Expected no error. Got %s.", err)
+	}
+	if isReconcilable != true {
+		t.Errorf("Expected the %s values would cause reconcilable. Received irreconcilable.", key)
+	}
+}
+
+// checkIrreconcilableResults is a shortcut for verifing results that should be Irreconcilable
+func checkIrreconcilableResults(t *testing.T, key string, err error, isReconcilable bool) {
+	if err != nil {
+		t.Errorf("Expected no error. Got %s.", err)
+	}
+	if isReconcilable != false {
+		t.Errorf("Expected %s values would cause irreconcilable. Received reconcilable.", key)
+	}
+}
+
 // TestReconcilable attempts to verify the conditions in which configs would and would not be
 // reconcilable. Welcome to the longest unittest you've ever read.
 func TestReconcilable(t *testing.T) {
-	// checkReconcilableResults is a shortcut for verifying results that should be reconcilable
-	checkReconcilableResults := func(key string, err error, isReconcilable bool) {
-		if err != nil {
-			t.Errorf("Expected no error. Got %s.", err)
-		}
-		if isReconcilable != true {
-			t.Errorf("Expected the same %s values would cause reconcilable. Received irreconcilable.", key)
-		}
-	}
-
-	// checkIreconcilableResults is a shortcut for verifing results that should be ireconcilable
-	checkIreconcilableResults := func(key string, err error, isReconcilable bool) {
-		if err != nil {
-			t.Errorf("Expected no error. Got %s.", err)
-		}
-		if isReconcilable != false {
-			t.Errorf("Expected different %s values would cause irreconcilable. Received reconcilable.", key)
-		}
-	}
 
 	d := Daemon{
 		name:              "nodeName",
@@ -120,13 +120,13 @@ func TestReconcilable(t *testing.T) {
 	}
 
 	// Verify Ignition version changes react as expected
-	isReconcilable, err := d.reconcilable(oldConfig, newConfig)
-	checkIreconcilableResults("ignition", err, isReconcilable)
+	isReconcilable, _, err := d.reconcilable(oldConfig, newConfig)
+	checkIrreconcilableResults(t, "ignition", err, isReconcilable)
 
 	// Match ignition versions
 	oldConfig.Spec.Config.Ignition.Version = "1.0"
-	isReconcilable, err = d.reconcilable(oldConfig, newConfig)
-	checkReconcilableResults("ignition", err, isReconcilable)
+	isReconcilable, _, err = d.reconcilable(oldConfig, newConfig)
+	checkReconcilableResults(t, "ignition", err, isReconcilable)
 
 	// Verify Networkd unit changes react as expected
 	oldConfig.Spec.Config.Networkd = ignv2_2types.Networkd{}
@@ -137,14 +137,14 @@ func TestReconcilable(t *testing.T) {
 			},
 		},
 	}
-	isReconcilable, err = d.reconcilable(oldConfig, newConfig)
-	checkIreconcilableResults("networkd", err, isReconcilable)
+	isReconcilable, _, err = d.reconcilable(oldConfig, newConfig)
+	checkIrreconcilableResults(t, "networkd", err, isReconcilable)
 
 	// Match Networkd
 	oldConfig.Spec.Config.Networkd = newConfig.Spec.Config.Networkd
 
-	isReconcilable, err = d.reconcilable(oldConfig, newConfig)
-	checkReconcilableResults("networkd", err, isReconcilable)
+	isReconcilable, _, err = d.reconcilable(oldConfig, newConfig)
+	checkReconcilableResults(t, "networkd", err, isReconcilable)
 
 	// Verify Disk changes react as expected
 	oldConfig.Spec.Config.Storage.Disks = []ignv2_2types.Disk{
@@ -153,13 +153,13 @@ func TestReconcilable(t *testing.T) {
 		},
 	}
 
-	isReconcilable, err = d.reconcilable(oldConfig, newConfig)
-	checkIreconcilableResults("disk", err, isReconcilable)
+	isReconcilable, _, err = d.reconcilable(oldConfig, newConfig)
+	checkIrreconcilableResults(t, "disk", err, isReconcilable)
 
 	// Match storage disks
 	newConfig.Spec.Config.Storage.Disks = oldConfig.Spec.Config.Storage.Disks
-	isReconcilable, err = d.reconcilable(oldConfig, newConfig)
-	checkReconcilableResults("disk", err, isReconcilable)
+	isReconcilable, _, err = d.reconcilable(oldConfig, newConfig)
+	checkReconcilableResults(t, "disk", err, isReconcilable)
 
 	// Verify Filesystems changes react as expected
 	oldConfig.Spec.Config.Storage.Filesystems = []ignv2_2types.Filesystem{
@@ -168,13 +168,13 @@ func TestReconcilable(t *testing.T) {
 		},
 	}
 
-	isReconcilable, err = d.reconcilable(oldConfig, newConfig)
-	checkIreconcilableResults("filesystem", err, isReconcilable)
+	isReconcilable, _, err = d.reconcilable(oldConfig, newConfig)
+	checkIrreconcilableResults(t, "filesystem", err, isReconcilable)
 
 	// Match Storage filesystems
 	newConfig.Spec.Config.Storage.Filesystems = oldConfig.Spec.Config.Storage.Filesystems
-	isReconcilable, err = d.reconcilable(oldConfig, newConfig)
-	checkReconcilableResults("filesystem", err, isReconcilable)
+	isReconcilable, _, err = d.reconcilable(oldConfig, newConfig)
+	checkReconcilableResults(t, "filesystem", err, isReconcilable)
 
 	// Verify Raid changes react as expected
 	oldConfig.Spec.Config.Storage.Raid = []ignv2_2types.Raid{
@@ -183,11 +183,190 @@ func TestReconcilable(t *testing.T) {
 		},
 	}
 
-	isReconcilable, err = d.reconcilable(oldConfig, newConfig)
-	checkIreconcilableResults("raid", err, isReconcilable)
+	isReconcilable, _, err = d.reconcilable(oldConfig, newConfig)
+	checkIrreconcilableResults(t, "raid", err, isReconcilable)
 
 	// Match storage raid
 	newConfig.Spec.Config.Storage.Raid = oldConfig.Spec.Config.Storage.Raid
-	isReconcilable, err = d.reconcilable(oldConfig, newConfig)
-	checkReconcilableResults("raid", err, isReconcilable)
+	isReconcilable, _, err = d.reconcilable(oldConfig, newConfig)
+	checkReconcilableResults(t, "raid", err, isReconcilable)
+}
+
+func TestReconcilableSameSSH(t *testing.T) {
+	// expectedError is the error we will use when expecting an error to return
+	expectedError := fmt.Errorf("broken")
+
+	// testClient is the NodeUpdaterClient mock instance that will front
+	// calls to update the host.
+	testClient := RpmOstreeClientMock{
+		GetBootedOSImageURLReturns: []GetBootedOSImageURLReturn{},
+		RunPivotReturns: []error{
+			// First run will return no error
+			nil,
+			// Second rrun will return our expected error
+			expectedError},
+	}
+
+	// Create a Daemon instance with mocked clients
+	d := Daemon{
+		name:              "nodeName",
+		OperatingSystem:   MachineConfigDaemonOSRHCOS,
+		NodeUpdaterClient: testClient,
+		loginClient:       nil, // set to nil as it will not be used within tests
+		client:            fake.NewSimpleClientset(),
+		kubeClient:        k8sfake.NewSimpleClientset(),
+		rootMount:         "/",
+		bootedOSImageURL:  "test",
+	}
+
+	// Set up machineconfigs that have identical SSH keys
+	tempUser1 := ignv2_2types.PasswdUser{SSHAuthorizedKeys: []ignv2_2types.SSHAuthorizedKey{"1234"}}
+	oldMcfg := &mcfgv1.MachineConfig{
+		Spec: mcfgv1.MachineConfigSpec{
+			Config: ignv2_2types.Config{
+				Passwd: ignv2_2types.Passwd{
+					Users: []ignv2_2types.PasswdUser{tempUser1},
+				},
+			},
+		},
+	}
+	newMcfg := &mcfgv1.MachineConfig{
+		Spec: mcfgv1.MachineConfigSpec{
+			Config: ignv2_2types.Config{
+				Passwd: ignv2_2types.Passwd{
+					Users: []ignv2_2types.PasswdUser{tempUser1},
+				},
+			},
+		},
+	}
+
+	canReconcile, toChange, err := d.reconcilable(oldMcfg, newMcfg)
+
+	checkReconcilableResults(t, "ssh", err, canReconcile)
+
+	if len(toChange) != 0 {
+		t.Errorf("List of user indices with SSH differences should be empty")
+	}
+}
+func TestReconcilableChangedSSH(t *testing.T) {
+	// expectedError is the error we will use when expecting an error to return
+	expectedError := fmt.Errorf("broken")
+
+	// testClient is the NodeUpdaterClient mock instance that will front
+	// calls to update the host.
+	testClient := RpmOstreeClientMock{
+		GetBootedOSImageURLReturns: []GetBootedOSImageURLReturn{},
+		RunPivotReturns: []error{
+			// First run will return no error
+			nil,
+			// Second rrun will return our expected error
+			expectedError},
+	}
+
+	// Create a Daemon instance with mocked clients
+	d := Daemon{
+		name:              "nodeName",
+		OperatingSystem:   MachineConfigDaemonOSRHCOS,
+		NodeUpdaterClient: testClient,
+		loginClient:       nil, // set to nil as it will not be used within tests
+		client:            fake.NewSimpleClientset(),
+		kubeClient:        k8sfake.NewSimpleClientset(),
+		rootMount:         "/",
+		bootedOSImageURL:  "test",
+	}
+
+	// Set up machineconfigs that are identical except for SSH keys
+	tempUser1 := ignv2_2types.PasswdUser{SSHAuthorizedKeys: []ignv2_2types.SSHAuthorizedKey{"1234"}}
+	tempUser2 := ignv2_2types.PasswdUser{SSHAuthorizedKeys: []ignv2_2types.SSHAuthorizedKey{"5678"}}
+	oldMcfg := &mcfgv1.MachineConfig{
+		Spec: mcfgv1.MachineConfigSpec{
+			Config: ignv2_2types.Config{
+				Passwd: ignv2_2types.Passwd{
+					Users: []ignv2_2types.PasswdUser{tempUser1},
+				},
+			},
+		},
+	}
+	newMcfg := &mcfgv1.MachineConfig{
+		Spec: mcfgv1.MachineConfigSpec{
+			Config: ignv2_2types.Config{
+				Passwd: ignv2_2types.Passwd{
+					Users: []ignv2_2types.PasswdUser{tempUser2},
+				},
+			},
+		},
+	}
+
+	canReconcile, toChange, err := d.reconcilable(oldMcfg, newMcfg)
+
+	checkReconcilableResults(t, "ssh", err, canReconcile)
+
+	if len(toChange) == 0 {
+		t.Errorf("List of user indices with SSH differences should not be empty")
+	}
+}
+
+func TestWriteSSHKeys(t *testing.T) {
+	// expectedError is the error we will use when expecting an error to return
+	expectedError := fmt.Errorf("broken")
+
+	// testClient is the NodeUpdaterClient mock instance that will front
+	// calls to update the host.
+	testClient := RpmOstreeClientMock{
+		GetBootedOSImageURLReturns: []GetBootedOSImageURLReturn{},
+		RunPivotReturns: []error{
+			// First run will return no error
+			nil,
+			// Second rrun will return our expected error
+			expectedError},
+	}
+
+	mockFS := &FsClientMock{MkdirAllReturns: []error{nil}, WriteFileReturns: []error{nil}}
+
+	// Create a Daemon instance with mocked clients
+	d := Daemon{
+		name:              "nodeName",
+		OperatingSystem:   MachineConfigDaemonOSRHCOS,
+		NodeUpdaterClient: testClient,
+		loginClient:       nil, // set to nil as it will not be used within tests
+		client:            fake.NewSimpleClientset(),
+		kubeClient:        k8sfake.NewSimpleClientset(),
+		rootMount:         "/",
+		bootedOSImageURL:  "test",
+		fileSystemClient:  mockFS,
+	}
+
+	// Set up machineconfigs that are identical except for SSH keys
+	tempUser1 := ignv2_2types.PasswdUser{SSHAuthorizedKeys: []ignv2_2types.SSHAuthorizedKey{"1234"}}
+	tempUser2 := ignv2_2types.PasswdUser{SSHAuthorizedKeys: []ignv2_2types.SSHAuthorizedKey{"5678"}}
+	oldMcfg := &mcfgv1.MachineConfig{
+		Spec: mcfgv1.MachineConfigSpec{
+			Config: ignv2_2types.Config{
+				Passwd: ignv2_2types.Passwd{
+					Users: []ignv2_2types.PasswdUser{tempUser1},
+				},
+			},
+		},
+	}
+	newMcfg := &mcfgv1.MachineConfig{
+		Spec: mcfgv1.MachineConfigSpec{
+			Config: ignv2_2types.Config{
+				Passwd: ignv2_2types.Passwd{
+					Users: []ignv2_2types.PasswdUser{tempUser2},
+				},
+			},
+		},
+	}
+
+	tempIndices := []int{0}
+	err := d.writeSSHKeys(oldMcfg.Spec.Config.Passwd.Users, newMcfg.Spec.Config.Passwd.Users, tempIndices)
+	if err != nil {
+		t.Errorf("Expected no error. Got %s.", err)
+	}
+
+	newMcfg.Spec.Config.Passwd.Users = oldMcfg.Spec.Config.Passwd.Users
+	err = d.writeSSHKeys(oldMcfg.Spec.Config.Passwd.Users, newMcfg.Spec.Config.Passwd.Users, tempIndices)
+	if err == nil {
+		t.Errorf("Expected error, SSHKeys identical, nothing to write")
+	}
 }

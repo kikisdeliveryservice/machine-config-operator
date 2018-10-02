@@ -527,7 +527,7 @@ func (dn *Daemon) isDesiredMachineState() (bool, string, error) {
 	// config, the machine is definitely not in its desired state. this function
 	// will return true (meaning they are reconcilable) if there aren't actually
 	// changes.
-	reconcilable, err := dn.reconcilable(currentConfig, desiredConfig)
+	reconcilable, _, err := dn.reconcilable(currentConfig, desiredConfig)
 	if err != nil {
 		return false, "", err
 	}
