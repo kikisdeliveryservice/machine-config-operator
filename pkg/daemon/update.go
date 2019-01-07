@@ -14,11 +14,11 @@ import (
 	"strconv"
 	"time"
 
-	errors "github.com/pkg/errors"
 	ignv2_2types "github.com/coreos/ignition/config/v2_2/types"
 	"github.com/golang/glog"
 	drain "github.com/openshift/kubernetes-drain"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	errors "github.com/pkg/errors"
 	"github.com/vincent-petithory/dataurl"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -54,7 +54,7 @@ func replaceFileContentsAtomically(fpath string, b []byte) error {
 func (dn *Daemon) writePendingState(desiredConfig *mcfgv1.MachineConfig) error {
 	t := &pendingConfigState{
 		PendingConfig: desiredConfig.GetName(),
-		BootID: dn.bootID,
+		BootID:        dn.bootID,
 	}
 	b, err := json.Marshal(t)
 	if err != nil {
@@ -190,10 +190,37 @@ func (dn *Daemon) reconcilable(oldConfig, newConfig *mcfgv1.MachineConfig) *stri
 					msg := "Ignition passwd user section contains unsupported changes"
 					return &msg
 				}
+			} else if len(oldIgn.Passwd.Users) == 1 && len(newIgn.Passwd.Users) == 1 {
+				// Check if the SSHKeys match
+				if oldIgn.Passwd.Users[0].Name == "core" && newIgn.Passwd.Users[0].Name == "core" {
+					if !reflect.DeepEqual(oldIgn.Passwd.Users[0].SSHAuthorizedKeys, newIgn.Passwd.Users[0].SSHAuthorizedKeys) {
+						// keys don't match, let's create 2 temp Users
+						tempOld := oldIgn.Passwd.Users[0]
+						tempNew := newIgn.Passwd.Users[0]
+						// Let's set both Users' SSHKeys to match
+						tempOld.SSHAuthorizedKeys = tempNew.SSHAuthorizedKeys
+						// Now compare the two Users controlling for the SSHAuthorizedKey diff
+						if reflect.DeepEqual(tempOld, tempNew) {
+							// only diff between the two Passwds was the SSH key
+							glog.Info("SSH Keys reconcilable")
+						} else {
+							// there are differences other than just the SSH key
+							msg := "Ignition passwd user section contains unsupported changes"
+							return &msg
+						}
+					} else {
+						msg := "Ignition passwd user section contains unsupported changes"
+						return &msg
+					}
+				} else {
+					msg := "Ignition passwd user section contains unsupported changes"
+					return &msg
+				}
+
+			} else {
+				msg := "Ignition passwd user section contains unsupported changes"
+				return &msg
 			}
-		} else {
-			msg := "Ignition passwd section contains unsupported changes"
-			return &msg
 		}
 	}
 
