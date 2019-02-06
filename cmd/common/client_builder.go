@@ -53,7 +53,7 @@ func NewClientBuilder(kubeconfig string) (*ClientBuilder, error) {
 		glog.V(4).Infof("Loading kube client config from path %q", kubeconfig)
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 	} else {
-		glog.V(4).Infof("Using in-cluster kube client config")
+		glog.V(4).Info("Using in-cluster kube client config")
 		config, err = rest.InClusterConfig()
 	}
 	if err != nil {

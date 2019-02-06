@@ -56,7 +56,7 @@ func (optr *Operator) syncAll(rconfig renderConfig) error {
 		agg = utilerrors.NewAggregate(errs)
 		return fmt.Errorf("error syncing: %v", agg.Error())
 	} else if optr.inClusterBringup {
-		glog.Infof("Initialization complete")
+		glog.Info("Initialization complete")
 		optr.inClusterBringup = false
 	}
 
