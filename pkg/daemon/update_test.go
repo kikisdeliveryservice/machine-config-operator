@@ -10,54 +10,6 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 )
 
-// TestUpdateOS verifies the return errors from attempting to update the OS follow expectations
-func TestUpdateOS(t *testing.T) {
-	// expectedError is the error we will use when expecting an error to return
-	expectedError := fmt.Errorf("broken")
-
-	// testClient is the NodeUpdaterClient mock instance that will front
-	// calls to update the host.
-	testClient := RpmOstreeClientMock{
-		GetBootedOSImageURLReturns: []GetBootedOSImageURLReturn{},
-		RunPivotReturns: []error{
-			// First run will return no error
-			nil,
-			// Second rrun will return our expected error
-			expectedError},
-	}
-
-	// Create a Daemon instance with mocked clients
-	d := Daemon{
-		name:              "nodeName",
-		OperatingSystem:   MachineConfigDaemonOSRHCOS,
-		NodeUpdaterClient: testClient,
-		loginClient:       nil, // set to nil as it will not be used within tests
-		client:            fake.NewSimpleClientset(),
-		kubeClient:        k8sfake.NewSimpleClientset(),
-		rootMount:         "/",
-		bootedOSImageURL:  "test",
-	}
-
-	// Set up machineconfigs to pass to updateOS.
-	mcfg := &mcfgv1.MachineConfig{}
-	// differentMcfg has a different OSImageURL so it will force Daemon.UpdateOS
-	// to trigger an update of the operatingsystem (as fronted by our testClient)
-	differentMcfg := &mcfgv1.MachineConfig{
-		Spec: mcfgv1.MachineConfigSpec{
-			OSImageURL: "somethingDifferent",
-		},
-	}
-
-	// This should be a no-op
-	if err := d.updateOS(mcfg); err != nil {
-		t.Errorf("Expected no error. Got %s.", err)
-	}
-	// Second call should return an error
-	if err := d.updateOS(differentMcfg); err == expectedError {
-		t.Error("Expected an error. Got none.")
-	}
-}
-
 // TestReconcilable attempts to verify the conditions in which configs would and would not be
 // reconcilable. Welcome to the longest unittest you've ever read.
 func TestReconcilable(t *testing.T) {
@@ -266,6 +218,31 @@ func TestReconcilableSSH(t *testing.T) {
 
 }
 
+// TestVerifyUserFields check that Passwd.User has one user with name "core", 1 or more ssh keys
+// and all other fields are empty.
+func TestVerifyUserFields(t *testing.T) {
+	//verifyUserFields(pwdUser ignv2_2types.PasswdUser) string
+	testUser := ignv2_2types.PasswdUser{Name: "core", SSHAuthorizedKeys: []ignv2_2types.SSHAuthorizedKey{"5678", "abc"}}
+	err := verifyUserFields(testUser)
+	if len(err) != 0 {
+		t.Errorf("No error expected, got: %s", err)
+	}
+
+	testUser.Name = "notcore"
+	err = verifyUserFields(testUser)
+	if len(err) == 0 {
+		t.Error("Error expected, user must be named core")
+	}
+
+	testUser.HomeDir = ""
+	testUser.SSHAuthorizedKeys = nil
+	err = verifyUserFields(testUser)
+
+	if len(err) == 0 {
+		t.Error("Error expected, only SSHKeys and name may have values")
+	}
+}
+
 func TestUpdateSSHKeys(t *testing.T) {
 	// expectedError is the error we will use when expecting an error to return
 	expectedError := fmt.Errorf("broken")
@@ -321,6 +298,54 @@ func TestUpdateSSHKeys(t *testing.T) {
 	err = d.updateSSHKeys(newMcfg2.Spec.Config.Passwd.Users)
 	if err != nil {
 		t.Errorf("Expected no error. Got: %s", err)
+	}
+}
+
+// TestUpdateOS verifies the return errors from attempting to update the OS follow expectations
+func TestUpdateOS(t *testing.T) {
+	// expectedError is the error we will use when expecting an error to return
+	expectedError := fmt.Errorf("broken")
+
+	// testClient is the NodeUpdaterClient mock instance that will front
+	// calls to update the host.
+	testClient := RpmOstreeClientMock{
+		GetBootedOSImageURLReturns: []GetBootedOSImageURLReturn{},
+		RunPivotReturns: []error{
+			// First run will return no error
+			nil,
+			// Second rrun will return our expected error
+			expectedError},
+	}
+
+	// Create a Daemon instance with mocked clients
+	d := Daemon{
+		name:              "nodeName",
+		OperatingSystem:   MachineConfigDaemonOSRHCOS,
+		NodeUpdaterClient: testClient,
+		loginClient:       nil, // set to nil as it will not be used within tests
+		client:            fake.NewSimpleClientset(),
+		kubeClient:        k8sfake.NewSimpleClientset(),
+		rootMount:         "/",
+		bootedOSImageURL:  "test",
+	}
+
+	// Set up machineconfigs to pass to updateOS.
+	mcfg := &mcfgv1.MachineConfig{}
+	// differentMcfg has a different OSImageURL so it will force Daemon.UpdateOS
+	// to trigger an update of the operatingsystem (as fronted by our testClient)
+	differentMcfg := &mcfgv1.MachineConfig{
+		Spec: mcfgv1.MachineConfigSpec{
+			OSImageURL: "somethingDifferent",
+		},
+	}
+
+	// This should be a no-op
+	if err := d.updateOS(mcfg); err != nil {
+		t.Errorf("Expected no error. Got %s.", err)
+	}
+	// Second call should return an error
+	if err := d.updateOS(differentMcfg); err == expectedError {
+		t.Error("Expected an error. Got none.")
 	}
 }
 
