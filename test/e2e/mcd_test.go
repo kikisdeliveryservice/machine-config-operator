@@ -93,7 +93,7 @@ func createMCToAddFile(name, filename, data, fs string) *mcv1.MachineConfig {
 func TestMCDeployed(t *testing.T) {
 	cs := framework.NewClientSet("")
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 1; i++ {
 		mcadd := createMCToAddFile("add-a-file", fmt.Sprintf("/etc/mytestconf%d", i), "test", "root")
 
 		// create the dummy MC now
