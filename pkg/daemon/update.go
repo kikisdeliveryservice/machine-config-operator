@@ -17,6 +17,7 @@ import (
 	"time"
 
 	ign2types "github.com/coreos/ignition/config/v2_2/types"
+	ign3types "github.com/coreos/ignition/v2/config/v3_0/types"
 	"github.com/golang/glog"
 	"github.com/google/renameio"
 	drain "github.com/openshift/cluster-api/pkg/drain"
