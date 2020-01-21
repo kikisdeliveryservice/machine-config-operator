@@ -5,15 +5,16 @@ import (
 	"reflect"
 
 	ign2types "github.com/coreos/ignition/config/v2_2/types"
-	validate "github.com/coreos/ignition/config/validate"
+	validate2 "github.com/coreos/ignition/config/validate"
 	ign3types "github.com/coreos/ignition/v2/config/v3_0/types"
+	validate3 "github.com/coreos/ignition/v2/config/validate"
 	"github.com/golang/glog"
 	errors "github.com/pkg/errors"
 )
 
 // NewIgnConfig returns an empty ignition config with version set as latest version
 func NewIgnConfig() ign2types.Config {
-	return igntypes.Config{
+	return ign2types.Config{
 		Ignition: ign2types.Ignition{
 			Version: ign2types.MaxVersion.String(),
 		},
@@ -27,17 +28,30 @@ func WriteTerminationError(err error) {
 	glog.Fatal(msg)
 }
 
+// ValidateIgnition blah
+func ValidateIgnition(ignconfig interface{}) error {
+	switch ign := ignconfig.(type) {
+	case ign2types.Config:
+		return validateIgnition2(ign)
+	case ign3types.Config:
+		return validateIgnition3(ign)
+	default:
+		return errors.Errorf("unrecognized ignition type")
+
+	}
+}
+
 // ValidateIgnition2 wraps the underlying Ignition validation, but explicitly supports
 // a completely empty Ignition config as valid.  This is because we
 // want to allow MachineConfig objects which just have e.g. KernelArguments
 // set, but no Ignition config.
 // Returns nil if the config is valid (per above) or an error containing a Report otherwise.
-func ValidateIgnition2(cfg ign2types.Config) error {
+func validateIgnition2(cfg ign2types.Config) error {
 	// only validate if Ignition Config is not empty
 	if reflect.DeepEqual(ign2types.Config{}, cfg) {
 		return nil
 	}
-	if report := validate.ValidateWithoutSource(reflect.ValueOf(cfg)); report.IsFatal() {
+	if report := validate2.ValidateWithoutSource(reflect.ValueOf(cfg)); report.IsFatal() {
 		return errors.Errorf("invalid Ignition config found: %v", report)
 	}
 	return nil
@@ -48,12 +62,12 @@ func ValidateIgnition2(cfg ign2types.Config) error {
 // want to allow MachineConfig objects which just have e.g. KernelArguments
 // set, but no Ignition config.
 // Returns nil if the config is valid (per above) or an error containing a Report otherwise.
-func ValidateIgnition3(cfg ign3types.Config) error {
+func validateIgnition3(cfg ign3types.Config) error {
 	// only validate if Ignition Config is not empty
 	if reflect.DeepEqual(ign3types.Config{}, cfg) {
 		return nil
 	}
-	if report := validate.ValidateWithoutSource(reflect.ValueOf(cfg)); report.IsFatal() {
+	if report := validate3.ValidateWithContext(cfg, nil); report.IsFatal() {
 		return errors.Errorf("invalid Ignition config found: %v", report)
 	}
 	return nil
