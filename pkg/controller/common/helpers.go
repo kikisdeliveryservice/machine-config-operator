@@ -8,6 +8,7 @@ import (
 	validate2 "github.com/coreos/ignition/config/validate"
 	ign3types "github.com/coreos/ignition/v2/config/v3_0/types"
 	validate3 "github.com/coreos/ignition/v2/config/validate"
+	ignconverter "github.com/coreos/ign2to3"
 	"github.com/golang/glog"
 	errors "github.com/pkg/errors"
 )
@@ -28,7 +29,13 @@ func WriteTerminationError(err error) {
 	glog.Fatal(msg)
 }
 
-// ValidateIgnition blah
+// ConvertIgnition3to2 takes an igntion v3 config and returns a v2 config
+ConvertIgnition3to2(ignconfig ign3types.Config) ign2types.Config, error {
+	converted2, err := ignitionconverter.Translate3to2(ignconfig)
+
+}
+
+// ValidateIgnition validates both igntion2 and ignition 3 configs
 func ValidateIgnition(ignconfig interface{}) error {
 	switch ign := ignconfig.(type) {
 	case ign2types.Config:
