@@ -191,6 +191,7 @@ github.com/coreos/go-systemd v0.0.0-20190620071333-e64a0ec8b42a h1:W8b4lQ4tFF21a
 github.com/coreos/go-systemd v0.0.0-20190620071333-e64a0ec8b42a/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=
 github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f h1:JOrtw2xFKzlg+cbHpyrpLDmnN1HqhBfnX7WDiW7eG2c=
 github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=
+github.com/coreos/ign-converter v0.0.0-20200117071129-cfed8ca7a6b4 h1:Dr77LzHISIqxG5Fkijp3Ya6YBYpv4Crb9izmbsTVlJk=
 github.com/coreos/ignition v0.33.0 h1:rYJoGv5v/5rCJAzyMaE9gU8pn7w7pv0M4rDzHvDK6T4=
 github.com/coreos/ignition v0.33.0/go.mod h1:WJQapxzEn9DE0ryxsGvm8QnBajm/XsS/PkrDqSpz+bA=
 github.com/coreos/ignition/v2 v2.1.1 h1:siNZchKAWoLeV708X4QWG9chTYhssE93HBKkZx+JJO8=
