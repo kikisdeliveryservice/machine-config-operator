@@ -32,14 +32,14 @@ var (
 		prometheus.GaugeOpts{
 			Name: "mcd_drain",
 			Help: "errors from failed drain",
-		}, []string{"drain_time", "err"})
+		}, []string{"drain_time", "node", "err"})
 
 	// MCDPivotErr shows errors encountered during pivot
 	MCDPivotErr = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "mcd_pivot_err",
 			Help: "errors encountered during pivot",
-		}, []string{"pivot_target", "err"})
+		}, []string{"pivot_target", "node", "err"})
 
 	// MCDState is state of mcd for indicated node (ex: degraded)
 	MCDState = prometheus.NewGaugeVec(
@@ -59,7 +59,7 @@ var (
 	MCDRebootErr = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "mcd_reboot_err",
-		}, []string{"message", "err"})
+		}, []string{"message", "node", "err"})
 
 	// MCDUpdateState logs completed update or error
 	MCDUpdateState = prometheus.NewGaugeVec(
