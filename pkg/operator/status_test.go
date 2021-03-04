@@ -147,6 +147,7 @@ func TestOperatorSyncStatus(t *testing.T) {
 		cond               []configv1.ClusterOperatorStatusCondition
 		nextVersion        string
 		inClusterBringUp   bool
+		expectedVersion    string
 	}
 	for idx, testCase := range []struct {
 		syncs []syncCase
@@ -277,7 +278,8 @@ func TestOperatorSyncStatus(t *testing.T) {
 		{
 			syncs: []syncCase{
 				{
-					nextVersion: "test-version-2",
+					nextVersion:     "test-version-2",
+					expectedVersion: "test-version",
 					cond: []configv1.ClusterOperatorStatusCondition{
 						{
 							Type:   configv1.OperatorProgressing,
@@ -338,7 +340,8 @@ func TestOperatorSyncStatus(t *testing.T) {
 					},
 				},
 				{
-					nextVersion: "test-version-2",
+					nextVersion:     "test-version-3",
+					expectedVersion: "test-version",
 					cond: []configv1.ClusterOperatorStatusCondition{
 						{
 							Type:   configv1.OperatorProgressing,
@@ -565,6 +568,10 @@ func TestOperatorSyncStatus(t *testing.T) {
 				}
 				assert.Equal(t, cond.Status, condition.Status, "test case %d, sync call %d, expected status for condition %v to be %v, but got %v", idx, j, condition.Type, cond.Status, condition.Status)
 				assert.Equal(t, cond.Reason, condition.Reason, "test case %d, sync call %d, expected reason for condition %v to be %v, but got %v", idx, j, condition.Type, cond.Reason, condition.Reason)
+			}
+			if sync.nextVersion != "" && cov1helpers.IsStatusConditionTrue(co.Status.Conditions, configv1.OperatorProgressing) {
+				expected := []configv1.OperandVersion([]configv1.OperandVersion{configv1.OperandVersion{Name: "operator", Version: sync.expectedVersion}})
+				assert.Equal(t, o.Status.Versions, expected, "test case %d, sync call %d, expected version: %v to not be equal to %v while operator progressing", idx, j, o.Status.Versions, optr.vStore.GetAll())
 			}
 		}
 	}
