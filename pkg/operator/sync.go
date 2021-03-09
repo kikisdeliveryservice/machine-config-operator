@@ -28,6 +28,7 @@ import (
 	"github.com/openshift/machine-config-operator/lib/resourceapply"
 	"github.com/openshift/machine-config-operator/lib/resourceread"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	ctrlcommon "github.com/openshift/machine-config-operator/pkg/controller/common"
 	templatectrl "github.com/openshift/machine-config-operator/pkg/controller/template"
 	daemonconsts "github.com/openshift/machine-config-operator/pkg/daemon/constants"
 	"github.com/openshift/machine-config-operator/pkg/operator/assets"
@@ -586,6 +587,19 @@ func (optr *Operator) syncRequiredMachineConfigPools(_ *renderConfig) error {
 				lastErr = errors.Wrapf(lastErr, "failed to update clusteroperator: %v", err)
 				return false, nil
 			}
+		}
+
+		// double check that a new controller config was rolled out before checking MCPs
+		cc, err := optr.ccLister.Get(ctrlcommon.ControllerConfigName)
+		if err != nil {
+			lastErr = err
+			return false, nil
+		}
+		ccver, ok := cc.Annotations[daemonconsts.GeneratedByVersionAnnotationKey]
+		optrVersion, _ := optr.vStore.Get("operator")
+		if ok && optrVersion != ccver {
+			lastErr = fmt.Errorf("waiting for rendered config rollout: controller version %s not yet updated to: %s", ccver, optrVersion)
+			return false, nil
 		}
 
 		pools, err := optr.mcpLister.List(labels.Everything())
