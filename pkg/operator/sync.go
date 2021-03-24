@@ -398,11 +398,13 @@ func (optr *Operator) syncMachineConfigController(config *renderConfig) error {
 		return err
 	}
 	cc := resourceread.ReadControllerConfigV1OrDie(ccBytes)
-	// Propagate our binary version into the controller config to help
+	// Propogate our cluster operator version into the controller config to help
 	// suppress rendered config generation until a corresponding
-	// new controller can roll out too.
-	// https://bugzilla.redhat.com/show_bug.cgi?id=1879099
-	cc.Annotations[daemonconsts.GeneratedByVersionAnnotationKey] = version.Raw
+	// new controller can roll out. We cannot rely on the binary version because this
+	// doesn't account for an upgrade that does not have a new MCO commit and will report
+	// finished before a new controllerconfig rolls out
+	//
+	cc.Annotations[daemonconsts.GeneratedByVersionAnnotationKey] = optr.vStore.GetAll()[0].Version
 	_, _, err = resourceapply.ApplyControllerConfig(optr.client.MachineconfigurationV1(), cc)
 	if err != nil {
 		return err
